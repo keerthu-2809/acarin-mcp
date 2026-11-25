@@ -13,7 +13,8 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 from openai import OpenAI
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+import markdown
+from starlette.responses import HTMLResponse, PlainTextResponse
 
 load_dotenv()  # no-op when there is no .env file (e.g. on Render)
 
@@ -73,6 +74,30 @@ async def health(request: Request) -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
+DOCS_TEMPLATE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acarin Knowledge Connector - Documentation</title>
+<style>
+  body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 860px;
+         margin: 0 auto; padding: 32px 20px; line-height: 1.6; color: #1f2328; }}
+  h1, h2, h3 {{ line-height: 1.25; }} h2 {{ border-bottom: 1px solid #d0d7de; padding-bottom: 6px; margin-top: 40px; }}
+  code {{ background: #f3f4f6; padding: 2px 5px; border-radius: 4px; font-size: 0.9em; }}
+  pre {{ background: #f6f8fa; padding: 14px; border-radius: 8px; overflow-x: auto; }} pre code {{ background: none; padding: 0; }}
+  table {{ border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }}
+  th, td {{ border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; vertical-align: top; }}
+  th {{ background: #f6f8fa; }} a {{ color: #0969da; }} hr {{ border: 0; border-top: 1px solid #d0d7de; margin: 32px 0; }}
+</style></head><body>{body}</body></html>"""
+
+
+@mcp.custom_route("/docs", methods=["GET"])
+async def docs(request: Request) -> HTMLResponse:
+    """Public documentation page (README.md rendered as HTML) - use this as the listing's documentation URL."""
+    md_text = (BASE_DIR / "README.md").read_text(encoding="utf-8")
+    body = markdown.markdown(md_text, extensions=["tables", "fenced_code"])
+    return HTMLResponse(DOCS_TEMPLATE.format(body=body))
+
+
 class BearerTokenAuth:
     """Optional: only active if MCP_AUTH_TOKEN is set.
     Rejects requests without 'Authorization: Bearer <token>' (except /health)."""
@@ -82,7 +107,7 @@ class BearerTokenAuth:
         self.expected = f"Bearer {token}".encode()
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and scope.get("path") != "/health":
+        if scope["type"] == "http" and scope.get("path") not in ("/health", "/docs"):
             headers = dict(scope["headers"])
             if headers.get(b"authorization") != self.expected:
                 await send({"type": "http.response.start", "status": 401,
