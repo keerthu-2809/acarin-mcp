@@ -11,7 +11,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py knowledge_base.md ./
+COPY server.py knowledge_base.md README.md ./
 
 # Run as a non-root user
 RUN useradd --create-home appuser
